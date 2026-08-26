@@ -7,7 +7,31 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
 </head>
-<body>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
+    <header class="bg-slate-800 border-b border-slate-700 p-4 text-center">
+        <h1 class="text-2x1 font-bold tracking-wider text-amber-400">GRANDMASTER PREP STUDIO</h1>
+        <p class="text-sm text-slate-400">Deep ENgine Analysis & Repertoire Builder</p>
+    </header>
+    <main class="flex-grow container mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6x1">
+        <div class="lg:col-span-2 flex flex-col items-center justify-center bg-slate-800 p-4 rounded-x1 shadow-lg border border-slate-700">
+            <div id="board" style="width:450px" class="mb-4"></div>
+            <div class="flex space-x-4">
+                <button id="startBtn" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded font-semibold transition">Clear Board</button>
+            </div>
+        </div>
+        <div class="bg-slate-800 p-4 rounded-x1 shadow-lg border border-slate-700 flex flex-col justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-amber-300 border-b border-slate-700 pb-2 mb-3">GM Diagnostics</h2>
+                <div class="mb-4">
+                    <span class="text-xs text-slate-400 uppercase tracking-wide">Stockfish Evaluation</span>
+                    <div id="evalDisplay" class="text-xl font-mono font-bold text-emerald-400 mt-1">+0.12</div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+</body>
 
 </body>
 </html>
