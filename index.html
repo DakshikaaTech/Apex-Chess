@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apex Chess</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chessboard.js CSS (THIS MAKES THE BOARD VISIBLE) -->
-    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
     <header class="bg-slate-800 border-b border-slate-700 p-4 text-center">
@@ -29,7 +27,7 @@
                 <h2 class="text-lg font-semibold text-amber-300 border-b border-slate-700 pb-2 mb-3">GM Diagnostics</h2>
                 <div class="mb-4">
                     <span class="text-xs text-slate-400 uppercase tracking-wide">Stockfish Evaluation</span>
-                    <div id="evalDisplay" class="text-xl font-mono font-bold text-emerald-400 mt-1">+0.12</div>
+                    <div id="evalDisplay" class="text-xl font-mono font-bold text-emerald-400 mt-1">Loading...</div>
                 </div>
                 <div class="mb-4">
                     <span class="text-xs text-slate-400 uppercase tracking-wide">Notation History</span>
@@ -43,91 +41,72 @@
         </div>
     </main>
 
-    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <!-- Chess.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <!-- Chessboard.js -->
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
     
     <script>
         var board = null;
         var game = new Chess();
         var $moveHistory = $('#moveHistory');
         var $fenInput = $('#fenInput');
+        var stockfish = null;
 
-        // Instead of loading the worker directly from a cross-origin CDN URL:
-// var stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+        $(document).ready(function() {
+            // 1. Initialize Chessboard
+            var config = {
+                draggable: true,
+                position: 'start',
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd
+            };
+            board = Chessboard('board', config);
+            updateStatus();
 
-var stockfish;
+            // 2. Initialize Stockfish Worker via Blob (Bypasses CORS restrictions)
+            fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
+                .then(response => response.text())
+                .then(scriptContent => {
+                    var blob = new Blob([scriptContent], { type: 'application/javascript' });
+                    var workerUrl = URL.createObjectURL(blob);
+                    
+                    stockfish = new Worker(workerUrl);
+                    stockfish.postMessage('uci');
 
-// Fetch Stockfish from CDN as text, create a local blob worker URL, and initialize
-fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
-    .then(response => response.text())
-    .then(scriptContent => {
-        var blob = new Blob([scriptContent], { type: 'application/javascript' });
-        var workerUrl = URL.createObjectURL(blob);
-        
-        stockfish = new Worker(workerUrl);
-        stockfish.postMessage('uci');
+                    stockfish.onmessage = function(event) {
+                        var line = event.data;
+                        if (line.startsWith('info') && line.includes('score')) {
+                            var matchCp = line.match(/score cp (-?\d+)/);
+                            var matchMate = line.match(/score mate (-?\d+)/);
 
-        stockfish.onmessage = function(event) {
-            var line = event.data;
-            if (line.startsWith('info') && line.includes('score')) {
-                var matchCp = line.match(/score cp (-?\d+)/);
-                var matchMate = line.match(/score mate (-?\d+)/);
+                            if (matchCp) {
+                                var cp = parseInt(matchCp[1]);
+                                var evalScore = (game.turn() === 'b' ? -cp : cp) / 100;
+                                var formatted = (evalScore > 0 ? '+' : '') + evalScore.toFixed(2);
+                                $('#evalDisplay').text(formatted);
 
-                if (matchCp) {
-                    var cp = parseInt(matchCp[1]);
-                    var evalScore = (game.turn() === 'b' ? -cp : cp) / 100;
-                    var formatted = (evalScore > 0 ? '+' : '') + evalScore.toFixed(2);
-                    $('#evalDisplay').text(formatted);
-
-                    if (evalScore > 0) {
-                        $('#evalDisplay').removeClass('text-rose-400 text-amber-400').addClass('text-emerald-400');
-                    } else if (evalScore < 0) {
-                        $('#evalDisplay').removeClass('text-emerald-400 text-amber-400').addClass('text-rose-400');
-                    }
-                } else if (matchMate) {
-                    $('#evalDisplay').text('M' + matchMate[1]).removeClass('text-emerald-400 text-rose-400').addClass('text-amber-400');
-                }
-            }
-        };
-        
-        // Trigger initial analysis once worker is ready
-        analyzePosition();
-    })
-    .catch(err => {
-        console.error("Failed to load Stockfish engine:", err);
-        $('#evalDisplay').text("Error");
-    });
-
-        stockfish.postMessage('uci');
-
-        stockfish.onmessage = function(event) {
-            var line = event.data;
-            if (line.startsWith('info') && line.includes('score')) {
-                var matchCp = line.match(/score cp (-?\d+)/);
-                var matchMate = line.match(/score mate (-?\d+)/);
-
-                if (matchCp) {
-                    var cp = parseInt(matchCp[1]);
-                    var evalScore = (game.turn() === 'b' ? -cp : cp) / 100;
-                    var formatted = (evalScore > 0 ? '+' : '') + evalScore.toFixed(2);
-                    $('#evalDisplay').text(formatted);
-
-                    if (evalScore > 0) {
-                        $('#evalDisplay').removeClass('text-rose-400 text-amber-400').addClass('text-emerald-400');
-                    } else if (evalScore < 0) {
-                        $('#evalDisplay').removeClass('text-emerald-400 text-amber-400').addClass('text-rose-400');
-                    }
-                } else if (matchMate) {
-                    $('#evalDisplay').text('M' + matchMate[1]).removeClass('text-emerald-400 text-rose-400').addClass('text-amber-400');
-                }
-            }
-        };
+                                if (evalScore > 0) {
+                                    $('#evalDisplay').removeClass('text-rose-400 text-amber-400').addClass('text-emerald-400');
+                                } else if (evalScore < 0) {
+                                    $('#evalDisplay').removeClass('text-emerald-400 text-amber-400').addClass('text-rose-400');
+                                }
+                            } else if (matchMate) {
+                                $('#evalDisplay').text('M' + matchMate[1]).removeClass('text-emerald-400 text-rose-400').addClass('text-amber-400');
+                            }
+                        }
+                    };
+                    analyzePosition();
+                })
+                .catch(err => {
+                    console.error("Failed to load Stockfish engine:", err);
+                    $('#evalDisplay').text("Offline");
+                });
+        });
 
         function analyzePosition() {
+            if (!stockfish) return;
             stockfish.postMessage('stop');
             stockfish.postMessage('position fen ' + game.fen());
             stockfish.postMessage('go depth 12');
@@ -172,18 +151,6 @@ fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
             board.position(game.fen());
         }
 
-        var config = {
-            draggable: true,
-            position: 'start',
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-            onDragStart: onDragStart,
-            onDrop: onDrop,
-            onSnapEnd: onSnapEnd
-        };
-
-        board = Chessboard('board', config);
-        updateStatus();
-
         $('#startBtn').on('click', function(){
             game.reset();
             board.start();
@@ -199,7 +166,6 @@ fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
     </script>
 </body>
 </html>
-
 
 
 
