@@ -56,7 +56,51 @@
         var $moveHistory = $('#moveHistory');
         var $fenInput = $('#fenInput');
 
-        var stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+        // Instead of loading the worker directly from a cross-origin CDN URL:
+// var stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+
+var stockfish;
+
+// Fetch Stockfish from CDN as text, create a local blob worker URL, and initialize
+fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
+    .then(response => response.text())
+    .then(scriptContent => {
+        var blob = new Blob([scriptContent], { type: 'application/javascript' });
+        var workerUrl = URL.createObjectURL(blob);
+        
+        stockfish = new Worker(workerUrl);
+        stockfish.postMessage('uci');
+
+        stockfish.onmessage = function(event) {
+            var line = event.data;
+            if (line.startsWith('info') && line.includes('score')) {
+                var matchCp = line.match(/score cp (-?\d+)/);
+                var matchMate = line.match(/score mate (-?\d+)/);
+
+                if (matchCp) {
+                    var cp = parseInt(matchCp[1]);
+                    var evalScore = (game.turn() === 'b' ? -cp : cp) / 100;
+                    var formatted = (evalScore > 0 ? '+' : '') + evalScore.toFixed(2);
+                    $('#evalDisplay').text(formatted);
+
+                    if (evalScore > 0) {
+                        $('#evalDisplay').removeClass('text-rose-400 text-amber-400').addClass('text-emerald-400');
+                    } else if (evalScore < 0) {
+                        $('#evalDisplay').removeClass('text-emerald-400 text-amber-400').addClass('text-rose-400');
+                    }
+                } else if (matchMate) {
+                    $('#evalDisplay').text('M' + matchMate[1]).removeClass('text-emerald-400 text-rose-400').addClass('text-amber-400');
+                }
+            }
+        };
+        
+        // Trigger initial analysis once worker is ready
+        analyzePosition();
+    })
+    .catch(err => {
+        console.error("Failed to load Stockfish engine:", err);
+        $('#evalDisplay').text("Error");
+    });
 
         stockfish.postMessage('uci');
 
