@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apex Chess</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chessboard.js CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
@@ -16,10 +18,10 @@
     <main class="flex-grow container mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl">
         <div class="lg:col-span-2 flex flex-col items-center justify-center bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
             <div id="board" style="width:450px" class="mb-4"></div>
-            <div class="flex space-x-4">
+            <div class="flex flex-wrap gap-3 justify-center">
                 <button id="startBtn" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded font-semibold transition">Reset Board</button>
                 <button id="clearBtn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded font-semibold transition">Clear Board</button>
-                <button id="puzzleBtn" class="px-4 py-2 bg-amber-600 hover:bg-rounded transition">Tactics Puzzle</button>
+                <button id="puzzleBtn" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded transition">Tactics Puzzle</button>
                 <button id="revealBtn" class="hidden px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition rounded">Reveal Move</button>
             </div>
         </div>
@@ -27,17 +29,20 @@
         <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 flex flex-col justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-amber-300 border-b border-slate-700 pb-2 mb-3">GM Diagnostics</h2>
+                
+                <!-- Puzzle Status Banner -->
                 <div id="puzzleStatusBox" class="hidden mb-4 p-2 bg-slate-900 border border-amber-500/50 rounded text-xs text-amber-300 font-medium">
                     <div class="font-bold uppercase tracking-wider mb-0.5">Tactics Mode</div>
                     <div id="puzzleInstructions">Find the best move!</div>
                 </div>
+
                 <div class="mb-4">
                     <span class="text-xs text-slate-400 uppercase tracking-wide">Stockfish Evaluation</span>
                     <div id="evalDisplay" class="text-xl font-mono font-bold text-emerald-400 mt-1">Loading...</div>
                 </div>
                 <div class="mb-4">
                     <span class="text-xs text-slate-400 uppercase tracking-wide">Notation History</span>
-                    <div id="moveHistory" class="h-48 bg-slate-900 border border-slate-700 rounded p-3 overflow-y-auto font-mono text-sm text-slate-300 mt-1"></div>
+                    <div id="moveHistory" class="h-40 bg-slate-900 border border-slate-700 rounded p-3 overflow-y-auto font-mono text-sm text-slate-300 mt-1"></div>
                 </div>
             </div>
             <div>
@@ -47,8 +52,11 @@
         </div>
     </main>
 
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <!-- Chess.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <!-- Chessboard.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
     
     <script>
@@ -58,8 +66,41 @@
         var $fenInput = $('#fenInput');
         var stockfish = null;
 
+        var isPuzzleMode = false;
+        var currentPuzzleIndex = 0;
+        var puzzleStep = 0;
+        var puzzles = [
+            {
+                fen: "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 0 5",
+                solution: [
+                    { from: 'c4', to: 'f7' },
+                    { from: 'e8', to: 'f7' },
+                    { from: 'f3', to: 'e5' },
+                    { from: 'c6', to: 'e5' },
+                    { from: 'd1', to: 'h5' }
+                ],
+                hint: "Exploit the exposed king with a sacrifice!"
+            },
+            {
+                fen: "r1b1k2r/pppp1ppp/2n5/4p3/1bB1n3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 6",
+                solution: [
+                    { from: 'c3', to: 'e4' },
+                    { from: 'd7', to: 'd5' },
+                    { from: 'c4', to: 'd5' },
+                    { from: 'd8', to: 'd5' }
+                ],
+                hint: "Recapture central control and regain material balance."
+            },
+            {
+                fen: "6k1/5ppp/8/8/8/8/4R3/6K1 w - - 0 1",
+                solution: [
+                    { from: 'e2', to: 'e8' }
+                ],
+                hint: "Look for the back rank weakness."
+            }
+        ];
+
         $(document).ready(function() {
-            // 1. Initialize Chessboard
             var config = {
                 draggable: true,
                 position: 'start',
@@ -71,7 +112,6 @@
             board = Chessboard('board', config);
             updateStatus();
 
-            // 2. Initialize Stockfish Worker via Blob (Bypasses CORS restrictions)
             fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
                 .then(response => response.text())
                 .then(scriptContent => {
@@ -144,6 +184,47 @@
         }
 
         function onDrop (source, target) {
+            if (isPuzzleMode) {
+                var puzzle = puzzles[currentPuzzleIndex];
+                var expected = puzzle.solution[puzzleStep];
+                
+                // Validate user move against expected source and target squares
+                if (source === expected.from && target === expected.to) {
+                    var move = game.move({
+                        from: source,
+                        to: target,
+                        promotion: 'q'
+                    });
+                    
+                    if (move === null) return 'snapback';
+                    
+                    puzzleStep++;
+                    updateStatus();
+
+                    if (puzzleStep >= puzzle.solution.length) {
+                        $('#puzzleInstructions').text("🎉 Puzzle Solved Successfully!");
+                        $('#revealBtn').addClass('hidden');
+                        setTimeout(function() {
+                            loadNextPuzzle();
+                        }, 1500);
+                    } else {
+                        // Play opponent automatic response step after a brief delay
+                        setTimeout(function() {
+                            var oppMove = puzzle.solution[puzzleStep];
+                            game.move({ from: oppMove.from, to: oppMove.to, promotion: 'q' });
+                            board.position(game.fen());
+                            puzzleStep++;
+                            updateStatus();
+                            $('#puzzleInstructions').text("Correct! Keep going: " + puzzle.hint);
+                        }, 400);
+                    }
+                    return;
+                } else {
+                    $('#puzzleInstructions').text("❌ Incorrect move. Try again or click Reveal! Hint: " + puzzle.hint);
+                    return 'snapback';
+                }
+            }
+
             var move = game.move({
                 from: source,
                 to: target,
@@ -157,13 +238,71 @@
             board.position(game.fen());
         }
 
+        function loadNextPuzzle() {
+            isPuzzleMode = true;
+            $('#puzzleStatusBox').removeClass('hidden');
+            $('#revealBtn').removeClass('hidden');
+            
+            var puzzle = puzzles[currentPuzzleIndex];
+            game.load(puzzle.fen);
+            board.position(game.fen());
+            puzzleStep = 0;
+            
+            $('#puzzleInstructions').text("Puzzle " + (currentPuzzleIndex + 1) + ": " + puzzle.hint);
+            updateStatus();
+            
+            currentPuzzleIndex = (currentPuzzleIndex + 1) % puzzles.length;
+        }
+
+        $('#puzzleBtn').on('click', function() {
+            loadNextPuzzle();
+        });
+
+        $('#revealBtn').on('click', function() {
+            if (!isPuzzleMode) return;
+            
+            // Look up the active puzzle (adjusting index tracker safely)
+            var activeIndex = (currentPuzzleIndex - 1 + puzzles.length) % puzzles.length;
+            var puzzle = puzzles[activeIndex];
+            var correctMove = puzzle.solution[puzzleStep];
+
+            // Execute correct user move
+            game.move({ from: correctMove.from, to: correctMove.to, promotion: 'q' });
+            board.position(game.fen());
+            puzzleStep++;
+            updateStatus();
+
+            if (puzzleStep >= puzzle.solution.length) {
+                $('#puzzleInstructions').text("💡 Move Revealed. Puzzle Completed!");
+                $('#revealBtn').addClass('hidden');
+                setTimeout(function() {
+                    loadNextPuzzle();
+                }, 1500);
+            } else {
+                setTimeout(function() {
+                    var oppMove = puzzle.solution[puzzleStep];
+                    game.move({ from: oppMove.from, to: oppMove.to, promotion: 'q' });
+                    board.position(game.fen());
+                    puzzleStep++;
+                    updateStatus();
+                    $('#puzzleInstructions').text("💡 Move Revealed. Now continue: " + puzzle.hint);
+                }, 400);
+            }
+        });
+
         $('#startBtn').on('click', function(){
+            isPuzzleMode = false;
+            $('#puzzleStatusBox').addClass('hidden');
+            $('#revealBtn').addClass('hidden');
             game.reset();
             board.start();
             updateStatus();
         });
 
         $('#clearBtn').on('click', function(){
+            isPuzzleMode = false;
+            $('#puzzleStatusBox').addClass('hidden');
+            $('#revealBtn').addClass('hidden');
             game.clear();
             board.clear();
             updateStatus();
@@ -172,7 +311,3 @@
     </script>
 </body>
 </html>
-
-
-
-
