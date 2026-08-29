@@ -10,6 +10,8 @@ You can try it out: https://dakshikaatech.github.io/Apex-Chess/
 - "clear board" button which will remove all the pieces from the board.
 - Annotations to record all the moves.
 - Board FEN acts as a standard, single-line text format to record a specific position on a chessboard.
+- Stockfish engine evaluation
+- 3 Tactics puzzles (Hope you get them right!)
 
 ## Credits:
 - https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css - For chessboard
