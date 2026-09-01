@@ -14,6 +14,7 @@ You can try it out: https://dakshikaatech.github.io/Apex-Chess/
 - 3 Tactics puzzles (Hope you get them right!)
 
 ## Credits:
+- Used Tailwind CSS
 - https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css - For chessboard
 - https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js - for chess.js
 - https://code.jquery.com/jquery-3.5.1.min.js - JQuery
